@@ -1,0 +1,72 @@
+{
+  "format": {
+    "enabled": true,
+    "formatOnSave": true,
+    "formatOnPaste": true,
+    "defaultFormatter": "prettier"
+  },
+  "lint": {
+    "enabled": true,
+    "lintOnSave": true,
+    "defaultLinter": "eslint"
+  },
+  "editor": {
+    "tabSize": 2,
+    "insertSpaces": true,
+    "wordWrap": "on",
+    "rulers": [100]
+  },
+  "files": {
+    "exclude": [
+      "**/.git",
+      "**/.DS_Store",
+      "**/node_modules",
+      "**/.expo",
+      "**/.bolt",
+      "**/build",
+      "**/dist"
+    ],
+    "watcherExclude": [
+      "**/.git/objects/**",
+      "**/node_modules/**",
+      "**/.expo/**",
+      "**/.bolt/**"
+    ]
+  },
+  "typescript": {
+    "validate": true,
+    "suggestionActions": {
+      "enabled": true
+    },
+    "preferences": {
+      "quoteStyle": "single",
+      "importModuleSpecifierPreference": "relative"
+    }
+  },
+  "javascript": {
+    "validate": true,
+    "preferences": {
+      "quoteStyle": "single",
+      "importModuleSpecifierPreference": "relative"
+    }
+  },
+  "react": {
+    "enabled": true,
+    "validateJsx": true
+  },
+  "ai": {
+    "defaultModel": "claude-3-sonnet",
+    "codeCompletionEnabled": true,
+    "inlineCompletionEnabled": true
+  },
+  "search": {
+    "exclude": {
+      "**/node_modules": true,
+      "**/.git": true,
+      "**/.expo": true,
+      "**/.bolt": true,
+      "**/build": true,
+      "**/dist": true
+    }
+  }
+} 
