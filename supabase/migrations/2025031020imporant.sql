@@ -145,3 +145,13 @@ CREATE POLICY "Users can view their own performance"
       AND (auth_user.role = 'manager' OR auth_user.role = 'admin')
     )
   );
+
+
+
+---  Dodaj dodatkowo politykę pozwalającą uwierzytelnionym użytkownikom na wstawianie danych do tabeli users. ---
+
+CREATE POLICY "Authenticated users can insert their own profile"
+ON users
+FOR INSERT
+TO authenticated
+WITH CHECK (id = auth.uid());

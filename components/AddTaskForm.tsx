@@ -124,7 +124,7 @@ export default function AddTaskForm({ onSubmit, workers, businessId, userId, onC
             >
               <Text style={[
                 styles.workerName,
-                assignedTo === worker.id && styles.workerNameSelected
+                assignedTo === worker.id && styles.NameSelected
               ]}>
                 {worker.first_name} {worker.last_name}
               </Text>

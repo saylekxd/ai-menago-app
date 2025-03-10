@@ -55,7 +55,6 @@
     "validateJsx": true
   },
   "ai": {
-    "defaultModel": "claude-3-sonnet",
     "codeCompletionEnabled": true,
     "inlineCompletionEnabled": true
   },
