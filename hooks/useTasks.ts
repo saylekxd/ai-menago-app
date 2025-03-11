@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Database } from '@/types/supabase';
+import * as FileSystem from 'expo-file-system';
 
 type Task = Database['public']['Tables']['tasks']['Row'];
 
@@ -93,26 +94,84 @@ export function useTasks(userId: string | null, isManager: boolean, businessId: 
   // Upload verification photo
   const uploadPhoto = async (uri: string, taskId: string) => {
     try {
-      const fileName = `task_verification/${taskId}/${new Date().getTime()}`;
+      // Generate a unique filename
+      const timestamp = new Date().getTime();
+      const fileName = `task_verification/${taskId}/${timestamp}.jpg`;
       
-      // Convert URI to blob
-      const response = await fetch(uri);
-      const blob = await response.blob();
+      // Get auth token
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
       
-      // Upload to Supabase storage
-      const { data, error } = await supabase.storage
-        .from('task-photos')
-        .upload(fileName, blob);
-
-      if (error) throw error;
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('task-photos')
-        .getPublicUrl(fileName);
-
-      return { url: publicUrl, error: null };
+      if (!token) {
+        throw new Error("Authentication token not available");
+      }
+      
+      // Get Supabase URL from environment or constants
+      // Using hardcoded URL from lib/supabase.ts as fallback
+      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 
+                           'https://bbxsssdbptcuitnjkrfi.supabase.co';
+      
+      // Log upload attempt
+      console.log(`Attempting to upload file to ${fileName}`);
+      
+      // Using direct REST API call instead of Supabase client
+      try {
+        const uploadResult = await FileSystem.uploadAsync(
+          `${supabaseUrl}/storage/v1/object/task-photos/${fileName}`,
+          uri,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'image/jpeg',
+            },
+            uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+          }
+        );
+        
+        if (uploadResult.status >= 200 && uploadResult.status < 300) {
+          // Get public URL 
+          const { data: { publicUrl } } = supabase.storage
+            .from('task-photos')
+            .getPublicUrl(fileName);
+            
+          return { url: publicUrl, error: null };
+        } else {
+          throw new Error(`Upload failed with status ${uploadResult.status}`);
+        }
+      } catch (uploadError) {
+        console.error('REST upload error:', uploadError);
+        
+        // Fallback to base64 upload if direct upload fails
+        try {
+          console.log('Attempting fallback to base64 upload...');
+          // Read the file as base64
+          const base64 = await FileSystem.readAsStringAsync(uri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          
+          // Upload to Supabase storage with base64
+          const { data, error } = await supabase.storage
+            .from('task-photos')
+            .upload(fileName, base64, {
+              contentType: 'image/jpeg',
+              upsert: true,
+            });
+          
+          if (error) throw error;
+          
+          // Get public URL
+          const { data: { publicUrl } } = supabase.storage
+            .from('task-photos')
+            .getPublicUrl(fileName);
+            
+          return { url: publicUrl, error: null };
+        } catch (base64Error) {
+          console.error('Base64 upload error:', base64Error);
+          throw base64Error;
+        }
+      }
     } catch (err: any) {
+      console.error('Upload error:', err);
       return { url: null, error: err.message };
     }
   };

@@ -110,30 +110,68 @@ export default function DashboardScreen() {
         return;
       }
       
+      // Launch camera with lower quality to prevent memory issues
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [4, 3],
-        quality: 0.8,
+        quality: 0.1, // Further reduced quality
+        exif: false, // Don't include EXIF data to reduce file size
+        base64: false, // Don't include base64 data in the result to save memory
       });
       
-      if (!result.canceled && result.assets[0].uri) {
-        const { url, error } = await uploadPhoto(result.assets[0].uri, selectedTask);
-        
-        if (error) {
-          alert(`Error uploading photo: ${error}`);
-          return;
-        }
-        
-        if (url) {
-          await completeTask(selectedTask, url);
-          setPhotoModalVisible(false);
-          await fetchTasks();
-        }
+      if (result.canceled) {
+        return; // User canceled, just return
       }
-    } catch (error) {
-      console.error('Error taking photo:', error);
-      alert('There was an error taking the photo. Please try again.');
+      
+      if (result.assets && result.assets[0]?.uri) {
+        const uri = result.assets[0].uri;
+        
+        try {
+          console.log('Uploading photo...', uri.substring(0, 50) + '...');
+          const uploadStart = Date.now();
+          const { url, error } = await uploadPhoto(uri, selectedTask);
+          const uploadDuration = Date.now() - uploadStart;
+          console.log(`Upload took ${uploadDuration}ms`);
+          
+          if (error) {
+            console.error('Error in photo upload:', error);
+            alert(`Error uploading photo: ${error}`);
+            return;
+          }
+          
+          if (url) {
+            console.log('Photo uploaded, completing task...');
+            await completeTask(selectedTask, url);
+            setPhotoModalVisible(false);
+            await fetchTasks();
+          }
+        } catch (uploadError: any) {
+          // Detailed error reporting for debugging
+          console.error('Error during photo upload process:', uploadError);
+          console.error('Error details:', JSON.stringify({
+            message: uploadError.message,
+            stack: uploadError.stack,
+            name: uploadError.name,
+            cause: uploadError.cause,
+          }));
+          
+          // User-friendly error message with technical details for dev
+          alert(`Failed to upload the photo: ${uploadError.message || 'Unknown error'}\n\nPlease try again with a smaller image or contact support with error code: ${Date.now()}`);
+        }
+      } else {
+        alert('No image was captured. Please try again.');
+      }
+    } catch (error: any) {
+      // Detailed error reporting for debugging
+      console.error('Camera error:', error);
+      console.error('Error details:', JSON.stringify({
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        cause: error.cause,
+      }));
+      
+      alert(`Error with camera: ${error.message || 'Please try again.'}`);
     }
   };
   
@@ -149,30 +187,68 @@ export default function DashboardScreen() {
         return;
       }
       
+      // Launch image picker with lower quality to prevent memory issues
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [4, 3],
-        quality: 0.8,
+        quality: 0.1, // Further reduced quality
+        exif: false, // Don't include EXIF data to reduce file size
+        base64: false, // Don't include base64 data in the result to save memory
       });
       
-      if (!result.canceled && result.assets[0].uri) {
-        const { url, error } = await uploadPhoto(result.assets[0].uri, selectedTask);
-        
-        if (error) {
-          alert(`Error uploading photo: ${error}`);
-          return;
-        }
-        
-        if (url) {
-          await completeTask(selectedTask, url);
-          setPhotoModalVisible(false);
-          await fetchTasks();
-        }
+      if (result.canceled) {
+        return; // User canceled, just return
       }
-    } catch (error) {
-      console.error('Error selecting image:', error);
-      alert('There was an error selecting the image. Please try again.');
+      
+      if (result.assets && result.assets[0]?.uri) {
+        const uri = result.assets[0].uri;
+        
+        try {
+          console.log('Uploading photo from gallery...', uri.substring(0, 50) + '...');
+          const uploadStart = Date.now();
+          const { url, error } = await uploadPhoto(uri, selectedTask);
+          const uploadDuration = Date.now() - uploadStart;
+          console.log(`Upload took ${uploadDuration}ms`);
+          
+          if (error) {
+            console.error('Error in photo upload:', error);
+            alert(`Error uploading photo: ${error}`);
+            return;
+          }
+          
+          if (url) {
+            console.log('Photo uploaded, completing task...');
+            await completeTask(selectedTask, url);
+            setPhotoModalVisible(false);
+            await fetchTasks();
+          }
+        } catch (uploadError: any) {
+          // Detailed error reporting for debugging
+          console.error('Error during photo upload process:', uploadError);
+          console.error('Error details:', JSON.stringify({
+            message: uploadError.message,
+            stack: uploadError.stack,
+            name: uploadError.name,
+            cause: uploadError.cause,
+          }));
+          
+          // User-friendly error message with technical details for dev
+          alert(`Failed to upload the photo: ${uploadError.message || 'Unknown error'}\n\nPlease try again with a smaller image or contact support with error code: ${Date.now()}`);
+        }
+      } else {
+        alert('No image was selected. Please try again.');
+      }
+    } catch (error: any) {
+      // Detailed error reporting for debugging
+      console.error('Gallery error:', error);
+      console.error('Error details:', JSON.stringify({
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        cause: error.cause,
+      }));
+      
+      alert(`Error with gallery: ${error.message || 'Please try again.'}`);
     }
   };
   

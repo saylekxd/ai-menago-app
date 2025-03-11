@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Stack, Redirect } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
@@ -34,21 +34,35 @@ export default function RootLayout() {
     <>
       <Stack screenOptions={{ headerShown: false }}>
         {!session ? (
-          // If no session, route to auth screens
-          <>
-            <Stack.Screen name="auth" />
-            <Stack.Screen name="index" redirect={true} />
-            <Stack.Screen name="(tabs)" redirect={true} />
-          </>
+          <Stack.Screen 
+            name="auth" 
+            options={{
+              headerShown: false,
+            }}
+          />
         ) : (
-          // If session exists, route to app screens
-          <>
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="index" redirect={true} />
-            <Stack.Screen name="auth" redirect={true} />
-          </>
+          <Stack.Screen 
+            name="(tabs)" 
+            options={{
+              headerShown: false,
+            }}
+          />
         )}
-        <Stack.Screen name="+not-found" />
+        
+        <Stack.Screen 
+          name="index" 
+          options={{
+            headerShown: false,
+          }}
+          redirect={!session ? true : undefined} 
+        />
+        
+        <Stack.Screen 
+          name="+not-found" 
+          options={{
+            headerShown: false,
+          }}
+        />
       </Stack>
       <StatusBar style="auto" />
     </>
