@@ -235,7 +235,7 @@ export default function AdminScreen() {
           onCancel={() => setAddTaskModalVisible(false)}
           businessId={userDetails?.business_id || ''}
           userId={user?.id || ''}
-          workers={workers.filter(w => w.role === 'worker')}
+          workers={workers}
         />
       </Modal>
       

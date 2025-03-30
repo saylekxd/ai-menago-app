@@ -7,7 +7,7 @@ type TaskInsert = Omit<Database['public']['Tables']['tasks']['Insert'], 'id' | '
 
 interface AddTaskFormProps {
   onSubmit: (taskData: TaskInsert) => Promise<{ data: any, error: string | null }>;
-  workers: Array<{ id: string, first_name: string, last_name: string }>;
+  workers: Array<{ id: string, first_name: string, last_name: string, role: string }>;
   businessId: string;
   userId: string;
   onCancel: () => void;
@@ -21,6 +21,13 @@ export default function AddTaskForm({ onSubmit, workers, businessId, userId, onC
   const [requiresPhoto, setRequiresPhoto] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Group workers by role for easier selection
+  const groupedWorkers = {
+    admins: workers.filter(w => w.role === 'admin'),
+    managers: workers.filter(w => w.role === 'manager'),
+    workers: workers.filter(w => w.role === 'worker')
+  };
   
   const handleSubmit = async () => {
     if (!title || !description || !dueDate || !assignedTo) {
@@ -61,6 +68,35 @@ export default function AddTaskForm({ onSubmit, workers, businessId, userId, onC
     } finally {
       setSubmitting(false);
     }
+  };
+  
+  const renderWorkerGroup = (title: string, workerList: Array<{ id: string, first_name: string, last_name: string, role: string }>) => {
+    if (workerList.length === 0) return null;
+    
+    return (
+      <View style={styles.workerGroup}>
+        <Text style={styles.workerGroupTitle}>{title}</Text>
+        <View style={styles.workersList}>
+          {workerList.map(worker => (
+            <TouchableOpacity
+              key={worker.id}
+              style={[
+                styles.workerItem,
+                assignedTo === worker.id && styles.workerItemSelected
+              ]}
+              onPress={() => setAssignedTo(worker.id)}
+            >
+              <Text style={[
+                styles.workerName,
+                assignedTo === worker.id && styles.workerNameSelected
+              ]}>
+                {worker.first_name} {worker.last_name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+    );
   };
   
   return (
@@ -112,25 +148,9 @@ export default function AddTaskForm({ onSubmit, workers, businessId, userId, onC
       
       <View style={styles.formGroup}>
         <Text style={styles.label}>Assign To*</Text>
-        <View style={styles.workersList}>
-          {workers.map(worker => (
-            <TouchableOpacity
-              key={worker.id}
-              style={[
-                styles.workerItem,
-                assignedTo === worker.id && styles.workerItemSelected
-              ]}
-              onPress={() => setAssignedTo(worker.id)}
-            >
-              <Text style={[
-                styles.workerName,
-                assignedTo === worker.id && styles.workerNameSelected
-              ]}>
-                {worker.first_name} {worker.last_name}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {renderWorkerGroup('Admins', groupedWorkers.admins)}
+        {renderWorkerGroup('Managers', groupedWorkers.managers)}
+        {renderWorkerGroup('Workers', groupedWorkers.workers)}
       </View>
       
       <View style={styles.formGroup}>
@@ -227,6 +247,15 @@ const styles = StyleSheet.create({
     flex: 1,
     borderWidth: 0,
     marginLeft: 8,
+  },
+  workerGroup: {
+    marginBottom: 12,
+  },
+  workerGroupTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#666',
+    marginBottom: 8,
   },
   workersList: {
     flexDirection: 'row',
