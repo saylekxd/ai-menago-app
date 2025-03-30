@@ -7,7 +7,7 @@ type TaskInsert = Omit<Database['public']['Tables']['tasks']['Insert'], 'id' | '
 
 interface AddTaskFormProps {
   onSubmit: (taskData: TaskInsert) => Promise<{ data: any, error: string | null }>;
-  workers: Array<{ id: string, first_name: string, last_name: string, role: string }>;
+  workers: Array<{ id: string, user_id: string, first_name: string, last_name: string, role: string }>;
   businessId: string;
   userId: string;
   onCancel: () => void;
@@ -39,11 +39,19 @@ export default function AddTaskForm({ onSubmit, workers, businessId, userId, onC
     setError(null);
     
     try {
+      // Find the selected worker to get their user_id
+      const selectedWorker = workers.find(w => w.id === assignedTo);
+      if (!selectedWorker) {
+        setError('Selected worker not found');
+        setSubmitting(false);
+        return;
+      }
+      
       const taskData: TaskInsert = {
         title,
         description,
         due_date: new Date(dueDate).toISOString(),
-        assigned_to: assignedTo,
+        assigned_to: selectedWorker.user_id, // Use user_id instead of id
         created_by: userId,
         requires_photo: requiresPhoto,
         business_id: businessId,
@@ -70,7 +78,7 @@ export default function AddTaskForm({ onSubmit, workers, businessId, userId, onC
     }
   };
   
-  const renderWorkerGroup = (title: string, workerList: Array<{ id: string, first_name: string, last_name: string, role: string }>) => {
+  const renderWorkerGroup = (title: string, workerList: Array<{ id: string, user_id: string, first_name: string, last_name: string, role: string }>) => {
     if (workerList.length === 0) return null;
     
     return (

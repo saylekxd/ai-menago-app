@@ -9,6 +9,35 @@ export function useTasks(userId: string | null, isManager: boolean, businessId: 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [userIdMap, setUserIdMap] = useState<{authId: string, userId: string} | null>(null);
+
+  // Get the user_id from auth.id mapping
+  useEffect(() => {
+    if (userId) {
+      fetchUserIdMapping();
+    }
+  }, [userId]);
+
+  const fetchUserIdMapping = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, user_id')
+        .eq('id', userId)
+        .single();
+
+      if (error) throw error;
+      
+      if (data) {
+        setUserIdMap({
+          authId: data.id,
+          userId: data.user_id
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching user mapping:', err);
+    }
+  };
 
   // Fetch tasks based on role
   const fetchTasks = async () => {
@@ -16,6 +45,10 @@ export function useTasks(userId: string | null, isManager: boolean, businessId: 
     setError(null);
 
     try {
+      if (!userIdMap) {
+        throw new Error('User ID mapping not available');
+      }
+
       let query = supabase.from('tasks').select('*');
 
       if (!businessId) {
@@ -26,8 +59,8 @@ export function useTasks(userId: string | null, isManager: boolean, businessId: 
       query = query.eq('business_id', businessId);
 
       // If not a manager, only show tasks assigned to this user
-      if (!isManager && userId) {
-        query = query.eq('assigned_to', userId);
+      if (!isManager && userIdMap.userId) {
+        query = query.eq('assigned_to', userIdMap.userId);
       }
 
       const { data, error } = await query.order('due_date', { ascending: true });
@@ -44,12 +77,20 @@ export function useTasks(userId: string | null, isManager: boolean, businessId: 
   // Add a new task (managers only)
   const addTask = async (taskData: Omit<Database['public']['Tables']['tasks']['Insert'], 'id' | 'created_at' | 'completed' | 'completed_at'>) => {
     try {
+      if (!userIdMap) {
+        return { data: null, error: 'User ID mapping not available' };
+      }
+
+      // Update created_by to use user_id if needed
+      const updatedTaskData = {
+        ...taskData,
+        created_by: userIdMap.userId, // Make sure we're using the correct user_id format
+        completed: false,
+      };
+
       const { data, error } = await supabase
         .from('tasks')
-        .insert({
-          ...taskData,
-          completed: false,
-        })
+        .insert(updatedTaskData)
         .select();
 
       if (error) throw error;
@@ -176,12 +217,12 @@ export function useTasks(userId: string | null, isManager: boolean, businessId: 
     }
   };
 
-  // Use effect to fetch tasks on component mount or when dependencies change
+  // Use effect to fetch tasks when userIdMap is available
   useEffect(() => {
-    if (userId) {
+    if (userId && userIdMap) {
       fetchTasks();
     }
-  }, [userId, isManager, businessId]);
+  }, [userId, isManager, businessId, userIdMap]);
 
   return {
     tasks,

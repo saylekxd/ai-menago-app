@@ -62,7 +62,7 @@ export function useBusinesses({ userId, userRole, businessId }: UseBusinessesOpt
       
       const { data, error } = await supabase
         .from('users')
-        .select('id, first_name, last_name, role')
+        .select('id, user_id, first_name, last_name, role')
         .eq('business_id', businessIdToFetch)
         .order('first_name', { ascending: true });
         
