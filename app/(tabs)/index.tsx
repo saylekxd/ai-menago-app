@@ -1,57 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Modal, RefreshControl } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
 import { Camera } from 'lucide-react-native';
-import { useAuth } from '@/hooks/useAuth';
-import { useTasks } from '@/hooks/useTasks';
-import TaskCard from '@/components/TaskCard';
-import { supabase } from '@/lib/supabase';
-import * as ImagePicker from 'expo-image-picker';
+import { useAuth, useTasks, useUserDetails } from '@/hooks';
+import { TaskCard, LoadingView, ErrorView, PhotoUploadModal } from '@/components';
 
 export default function DashboardScreen() {
   const { user } = useAuth();
-  const [userDetails, setUserDetails] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const { 
+    userDetails, 
+    loading: userLoading, 
+    error: userError, 
+    refetchUserDetails,
+    isManager
+  } = useUserDetails(user);
+  
   const [refreshing, setRefreshing] = useState(false);
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
   const [photoModalVisible, setPhotoModalVisible] = useState(false);
-  const [userError, setUserError] = useState<string | null>(null);
-  
-  // Get user role and business ID
-  useEffect(() => {
-    const fetchUserDetails = async () => {
-      if (!user) return;
-      
-      try {
-        const { data, error } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', user.id);
-          
-        if (error) throw error;
-        
-        // Check if user exists in the users table
-        if (!data || data.length === 0) {
-          setUserError('User profile not found. Please contact an administrator.');
-          setLoading(false);
-          return;
-        }
-        
-        // User exists, set the details
-        setUserDetails(data[0]);
-        setUserError(null);
-      } catch (error: any) {
-        console.error('Error fetching user details:', error);
-        setUserError(`Failed to load user profile: ${error.message}`);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    fetchUserDetails();
-  }, [user]);
   
   // Initialize tasks hook once we have user details
-  const isManager = userDetails?.role === 'manager' || userDetails?.role === 'admin';
   const { 
     tasks, 
     loading: tasksLoading, 
@@ -59,7 +26,11 @@ export default function DashboardScreen() {
     fetchTasks,
     completeTask,
     uploadPhoto 
-  } = useTasks(user?.id || null, isManager, userDetails?.business_id || null);
+  } = useTasks(
+    user?.id || null, 
+    isManager, 
+    userDetails?.business_id || null
+  );
   
   // Refresh tasks
   const onRefresh = async () => {
@@ -67,21 +38,7 @@ export default function DashboardScreen() {
     
     // If user details are missing, try to fetch them again
     if (!userDetails && user) {
-      try {
-        const { data, error } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', user.id);
-          
-        if (error) throw error;
-        
-        if (data && data.length > 0) {
-          setUserDetails(data[0]);
-          setUserError(null);
-        }
-      } catch (error) {
-        console.error('Error refreshing user details:', error);
-      }
+      await refetchUserDetails();
     }
     
     // Only fetch tasks if we have user details
@@ -98,290 +55,119 @@ export default function DashboardScreen() {
     setPhotoModalVisible(true);
   };
   
-  // Take photo and upload
-  const takePhoto = async () => {
+  // Handle task completion after photo upload
+  const handlePhotoUploaded = async (photoUrl: string) => {
     if (!selectedTask) return;
     
     try {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      
-      if (status !== 'granted') {
-        alert('Camera permission is required to take a verification photo');
-        return;
-      }
-      
-      // Launch camera with lower quality to prevent memory issues
-      const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.1, // Further reduced quality
-        exif: false, // Don't include EXIF data to reduce file size
-        base64: false, // Don't include base64 data in the result to save memory
-      });
-      
-      if (result.canceled) {
-        return; // User canceled, just return
-      }
-      
-      if (result.assets && result.assets[0]?.uri) {
-        const uri = result.assets[0].uri;
-        
-        try {
-          console.log('Uploading photo...', uri.substring(0, 50) + '...');
-          const uploadStart = Date.now();
-          const { url, error } = await uploadPhoto(uri, selectedTask);
-          const uploadDuration = Date.now() - uploadStart;
-          console.log(`Upload took ${uploadDuration}ms`);
-          
-          if (error) {
-            console.error('Error in photo upload:', error);
-            alert(`Error uploading photo: ${error}`);
-            return;
-          }
-          
-          if (url) {
-            console.log('Photo uploaded, completing task...');
-            await completeTask(selectedTask, url);
-            setPhotoModalVisible(false);
-            await fetchTasks();
-          }
-        } catch (uploadError: any) {
-          // Detailed error reporting for debugging
-          console.error('Error during photo upload process:', uploadError);
-          console.error('Error details:', JSON.stringify({
-            message: uploadError.message,
-            stack: uploadError.stack,
-            name: uploadError.name,
-            cause: uploadError.cause,
-          }));
-          
-          // User-friendly error message with technical details for dev
-          alert(`Failed to upload the photo: ${uploadError.message || 'Unknown error'}\n\nPlease try again with a smaller image or contact support with error code: ${Date.now()}`);
-        }
-      } else {
-        alert('No image was captured. Please try again.');
-      }
+      await completeTask(selectedTask, photoUrl);
+      await fetchTasks();
     } catch (error: any) {
-      // Detailed error reporting for debugging
-      console.error('Camera error:', error);
-      console.error('Error details:', JSON.stringify({
-        message: error.message,
-        stack: error.stack,
-        name: error.name,
-        cause: error.cause,
-      }));
-      
-      alert(`Error with camera: ${error.message || 'Please try again.'}`);
+      console.error('Error completing task:', error);
     }
   };
   
-  // Select image from library and upload
-  const selectImage = async () => {
-    if (!selectedTask) return;
+  // Handle photo upload logic
+  const handleUploadPhoto = async (uri: string): Promise<{ url?: string; error?: any }> => {
+    if (!selectedTask) return { error: 'No task selected' };
     
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const result = await uploadPhoto(uri, selectedTask);
       
-      if (status !== 'granted') {
-        alert('Gallery permission is required to select a verification photo');
-        return;
-      }
-      
-      // Launch image picker with lower quality to prevent memory issues
-      const result = await ImagePicker.launchImageLibraryAsync({
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.1, // Further reduced quality
-        exif: false, // Don't include EXIF data to reduce file size
-        base64: false, // Don't include base64 data in the result to save memory
-      });
-      
-      if (result.canceled) {
-        return; // User canceled, just return
-      }
-      
-      if (result.assets && result.assets[0]?.uri) {
-        const uri = result.assets[0].uri;
-        
-        try {
-          console.log('Uploading photo from gallery...', uri.substring(0, 50) + '...');
-          const uploadStart = Date.now();
-          const { url, error } = await uploadPhoto(uri, selectedTask);
-          const uploadDuration = Date.now() - uploadStart;
-          console.log(`Upload took ${uploadDuration}ms`);
-          
-          if (error) {
-            console.error('Error in photo upload:', error);
-            alert(`Error uploading photo: ${error}`);
-            return;
-          }
-          
-          if (url) {
-            console.log('Photo uploaded, completing task...');
-            await completeTask(selectedTask, url);
-            setPhotoModalVisible(false);
-            await fetchTasks();
-          }
-        } catch (uploadError: any) {
-          // Detailed error reporting for debugging
-          console.error('Error during photo upload process:', uploadError);
-          console.error('Error details:', JSON.stringify({
-            message: uploadError.message,
-            stack: uploadError.stack,
-            name: uploadError.name,
-            cause: uploadError.cause,
-          }));
-          
-          // User-friendly error message with technical details for dev
-          alert(`Failed to upload the photo: ${uploadError.message || 'Unknown error'}\n\nPlease try again with a smaller image or contact support with error code: ${Date.now()}`);
-        }
+      // Transform the result to match the expected interface
+      if (result.url) {
+        return { url: result.url };
       } else {
-        alert('No image was selected. Please try again.');
+        return { error: result.error };
       }
     } catch (error: any) {
-      // Detailed error reporting for debugging
-      console.error('Gallery error:', error);
-      console.error('Error details:', JSON.stringify({
-        message: error.message,
-        stack: error.stack,
-        name: error.name,
-        cause: error.cause,
-      }));
-      
-      alert(`Error with gallery: ${error.message || 'Please try again.'}`);
+      console.error('Error uploading photo:', error);
+      return { error: error.message || 'Failed to upload photo' };
     }
   };
   
-  // Handle task completion
+  // Handle direct task completion without photo
   const handleCompleteTask = async (taskId: string) => {
-    const task = tasks.find(t => t.id === taskId);
-    
-    if (!task) return;
-    
-    // If task requires photo and doesn't have one yet, show photo modal
-    if (task.requires_photo && !task.verification_photo_url) {
-      handleTakePhoto(taskId);
-      return;
+    try {
+      await completeTask(taskId);
+      await fetchTasks();
+    } catch (error: any) {
+      console.error('Error completing task:', error);
     }
-    
-    // Otherwise, just complete the task
-    await completeTask(taskId);
-    await fetchTasks();
   };
   
-  // Render task list
+  // Render task item
   const renderTaskItem = ({ item }: { item: any }) => (
-    <TaskCard 
-      task={item} 
+    <TaskCard
+      task={item}
       onComplete={handleCompleteTask}
       onTakePhoto={handleTakePhoto}
     />
   );
   
-  // Render loading state
-  if (loading || !user) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.loadingText}>Loading...</Text>
-      </View>
-    );
+  // Loading state
+  if (userLoading || !user) {
+    return <LoadingView />;
   }
   
-  // Render user error state if user profile is not found
+  // Error state
   if (userError) {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>My Tasks</Text>
+          <Text style={styles.title}>Dashboard</Text>
         </View>
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{userError}</Text>
-          <TouchableOpacity 
-            style={styles.refreshButton}
-            onPress={onRefresh}
-          >
-            <Text style={styles.refreshButtonText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
+        <ErrorView 
+          message={userError} 
+          onRetry={refetchUserDetails} 
+        />
       </View>
     );
   }
   
-  // Render tasks
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>My Tasks</Text>
-        <Text style={styles.welcome}>
-          Welcome, {userDetails?.first_name || 'User'}!
+        <Text style={styles.title}>Dashboard</Text>
+        <Text style={styles.subtitle}>
+          {userDetails?.role === 'worker' ? 'Your Tasks' : 'Team Tasks'}
         </Text>
       </View>
       
       {tasksError && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{tasksError}</Text>
-        </View>
+        <ErrorView 
+          message={tasksError} 
+          onRetry={fetchTasks} 
+        />
       )}
       
       <FlatList
         data={tasks}
         renderItem={renderTaskItem}
-        keyExtractor={item => item.id}
+        keyExtractor={(item) => item.id}
         contentContainerStyle={styles.taskList}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>
-              {tasksLoading 
-                ? 'Loading tasks...' 
-                : 'No tasks assigned to you yet.'}
-            </Text>
-          </View>
+          !tasksLoading && !tasksError ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>
+                {isManager 
+                  ? 'No tasks assigned. Add new tasks in the Admin panel.'
+                  : 'No tasks assigned to you at the moment.'}
+              </Text>
+            </View>
+          ) : null
         }
       />
       
-      {/* Photo verification modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
+      <PhotoUploadModal
         visible={photoModalVisible}
-        onRequestClose={() => setPhotoModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Verification Photo</Text>
-            <Text style={styles.modalText}>
-              Please provide a photo as verification for completing this task.
-            </Text>
-            
-            <View style={styles.modalActions}>
-              <TouchableOpacity 
-                style={[styles.modalButton, styles.photoButton]} 
-                onPress={takePhoto}
-              >
-                <Camera size={20} color="#fff" />
-                <Text style={styles.modalButtonText}>Take Photo</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={[styles.modalButton, styles.galleryButton]} 
-                onPress={selectImage}
-              >
-                <Text style={styles.modalButtonText}>Choose from Gallery</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={[styles.modalButton, styles.cancelButton]} 
-                onPress={() => setPhotoModalVisible(false)}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        onClose={() => setPhotoModalVisible(false)}
+        onPhotoUploaded={handlePhotoUploaded}
+        onUploadSuccess={handleUploadPhoto}
+      />
     </View>
   );
 }
@@ -402,101 +188,31 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginBottom: 8,
   },
-  welcome: {
+  subtitle: {
     fontSize: 16,
     color: '#fff',
     opacity: 0.9,
   },
-  loadingText: {
-    textAlign: 'center',
-    marginTop: 24,
-    fontSize: 16,
-    color: '#757575',
-  },
-  errorContainer: {
-    margin: 16,
-    padding: 16,
-    backgroundColor: '#FFEBEE',
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  errorText: {
-    color: '#D32F2F',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  refreshButton: {
-    backgroundColor: '#2196F3',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 4,
-  },
-  refreshButtonText: {
-    color: '#FFF',
-    fontWeight: 'bold',
-  },
   taskList: {
     padding: 16,
+    paddingBottom: 30,
   },
   emptyContainer: {
-    padding: 24,
+    padding: 16,
+    backgroundColor: '#FFF',
+    borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
   emptyText: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#757575',
     textAlign: 'center',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 24,
-    width: '85%',
-    maxWidth: 400,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 16,
-  },
-  modalText: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 24,
-  },
-  modalActions: {
-    gap: 12,
-  },
-  modalButton: {
-    padding: 12,
-    borderRadius: 4,
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  photoButton: {
-    backgroundColor: '#2196F3',
-  },
-  galleryButton: {
-    backgroundColor: '#9C27B0',
-  },
-  cancelButton: {
-    backgroundColor: '#F5F5F5',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
-  modalButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    marginLeft: 8,
-  },
-  cancelButtonText: {
-    color: '#666',
   },
 });

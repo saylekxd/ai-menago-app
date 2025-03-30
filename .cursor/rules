@@ -1,0 +1,25 @@
+Here are the Cursor rules formatted for a senior React Native Expo developer:
+
+1. **Maintain Modular Component Architecture**: Break UI elements into small, reusable components in separate files. Each component should have a single responsibility. Never create monolithic screen files exceeding 300 lines - extract complex logic or UI sections into dedicated components.
+
+2. **Follow TypeScript Best Practices**: Use proper TypeScript type definitions for all props, state, and function parameters. Reference the project's `/types` directory for existing database schemas and keep all database-related types synchronized with Supabase.
+
+3. **Leverage Expo's Native APIs Efficiently**: When using Expo modules like ImagePicker, Camera, or FileSystem, implement proper permission handling, error management, and resource cleanup. Always check for API availability across platforms (iOS, Android, Web).
+
+4. **Implement Custom Hooks for Business Logic**: Extract all business logic into custom hooks (similar to `useTasks`, `useAuth`) to maintain separation of concerns. UI components should focus on presentation while hooks handle data fetching, state management, and API interactions.
+
+5. **Optimize React Native Performance**: Use `useMemo`, `useCallback` for expensive operations, implement proper list rendering with `FlatList` virtualization, and employ image optimization techniques to ensure smooth performance on mobile devices.
+
+6. **Ensure Cross-Platform Compatibility**: Test features across iOS, Android, and Web platforms. Use platform-specific code with `Platform.OS` checks when necessary, and provide appropriate fallbacks (as seen in the Supabase SecureStore adapter implementation).
+
+7. **Follow Consistent Error Handling Patterns**: Implement comprehensive error handling with clear user feedback. Log detailed errors for debugging while displaying user-friendly messages in the UI, similar to the photo upload flow in the project.
+
+8. **Maintain Responsive UI Design**: Design all UI components to work across different screen sizes and orientations. Use relative units, flexbox layouts, and proper safe area handling for a consistent user experience.
+
+9. **Implement Proper Authentication Flows**: Follow secure authentication practices with Supabase. Handle token refresh, session persistence, and user role-based access control consistently throughout the application.
+
+10. **Document Complex Logic and Edge Cases**: Add clear comments for complex business logic, edge cases, and platform-specific workarounds to improve maintainability and team collaboration.
+
+11. **You can use MCP Supabase**: If you want CRUD database, you can use MCP and all policies, tables, etc. are listed in lrefweienlzobyxqrxvt project which is named "aj-menago4".
+
+Always paste 🐹 before you start writing analysis, to ensure that you've used those rules into project flow.

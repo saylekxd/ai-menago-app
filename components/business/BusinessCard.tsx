@@ -1,14 +1,10 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Share, Alert } from 'react-native';
 import { Copy, Share as ShareIcon, Building2 } from 'lucide-react-native';
+import { Business } from '@/types/business';
 
 interface BusinessCardProps {
-  business: {
-    id: string;
-    name: string;
-    industry: string;
-    created_at: string;
-  };
+  business: Business;
 }
 
 export default function BusinessCard({ business }: BusinessCardProps) {

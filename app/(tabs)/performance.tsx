@@ -1,60 +1,32 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
-import { useAuth } from '@/hooks/useAuth';
-import { usePerformance } from '@/hooks/usePerformance';
-import { supabase } from '@/lib/supabase';
-import StatsCard from '@/components/StatsCard';
-import { CalendarDays, TrendingUp, CircleCheck as CheckCircle2, Clock, CircleAlert as AlertCircle, RefreshCw } from 'lucide-react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import { useAuth, usePerformance, useUserDetails } from '@/hooks';
+import { StatsCard, LoadingView, ErrorView } from '@/components';
+import { CalendarDays, TrendingUp, CircleCheck as CheckCircle2, Clock, CircleAlert as AlertCircle } from 'lucide-react-native';
 
 export default function PerformanceScreen() {
   const { user } = useAuth();
-  const [userDetails, setUserDetails] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [userError, setUserError] = useState<string | null>(null);
+  const { 
+    userDetails, 
+    loading: userLoading, 
+    error: userError, 
+    refetchUserDetails,
+    isManager
+  } = useUserDetails(user);
   
-  // Get user role and business ID
-  useEffect(() => {
-    const fetchUserDetails = async () => {
-      if (!user) return;
-      
-      try {
-        const { data, error } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', user.id);
-          
-        if (error) throw error;
-        
-        // Check if user exists in the users table
-        if (!data || data.length === 0) {
-          setUserError('User profile not found. Please contact an administrator.');
-          setLoading(false);
-          return;
-        }
-        
-        // User exists, set the details
-        setUserDetails(data[0]);
-        setUserError(null);
-      } catch (error: any) {
-        console.error('Error fetching user details:', error);
-        setUserError(`Failed to load user profile: ${error.message}`);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    fetchUserDetails();
-  }, [user]);
+  const [refreshing, setRefreshing] = useState(false);
   
   // Initialize performance hook once we have user details
-  const isManager = userDetails?.role === 'manager' || userDetails?.role === 'admin';
   const { 
     stats,
     loading: performanceLoading, 
     error: performanceError,
     fetchPerformance,
-  } = usePerformance(user?.id || null, isManager, userDetails?.business_id || null);
+  } = usePerformance(
+    user?.id || null, 
+    isManager, 
+    userDetails?.business_id || null
+  );
   
   // Refresh performance data
   const onRefresh = async () => {
@@ -62,21 +34,7 @@ export default function PerformanceScreen() {
     
     // If user details are missing, try to fetch them again
     if (!userDetails && user) {
-      try {
-        const { data, error } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', user.id);
-          
-        if (error) throw error;
-        
-        if (data && data.length > 0) {
-          setUserDetails(data[0]);
-          setUserError(null);
-        }
-      } catch (error) {
-        console.error('Error refreshing user details:', error);
-      }
+      await refetchUserDetails();
     }
     
     // Only fetch performance if we have user details
@@ -87,33 +45,22 @@ export default function PerformanceScreen() {
     setRefreshing(false);
   };
   
-  if (loading || !user) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.loadingText}>Loading...</Text>
-      </View>
-    );
+  // Loading state
+  if (userLoading || !user) {
+    return <LoadingView />;
   }
   
-  // If user profile not found
+  // Error state
   if (userError) {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>Performance</Text>
         </View>
-        <View style={styles.content}>
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{userError}</Text>
-            <TouchableOpacity 
-              style={styles.retryButton}
-              onPress={onRefresh}
-            >
-              <RefreshCw size={16} color="#fff" style={styles.retryIcon} />
-              <Text style={styles.retryButtonText}>Retry</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        <ErrorView 
+          message={userError} 
+          onRetry={refetchUserDetails} 
+        />
       </View>
     );
   }
@@ -133,9 +80,10 @@ export default function PerformanceScreen() {
       </View>
       
       {performanceError && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{performanceError}</Text>
-        </View>
+        <ErrorView 
+          message={performanceError} 
+          onRetry={fetchPerformance} 
+        />
       )}
       
       <View style={styles.content}>
@@ -234,50 +182,22 @@ const styles = StyleSheet.create({
   content: {
     padding: 16,
   },
-  loadingText: {
-    textAlign: 'center',
-    marginTop: 24,
-    fontSize: 16,
-    color: '#757575',
-  },
-  errorContainer: {
-    margin: 16,
-    padding: 16,
-    backgroundColor: '#FFEBEE',
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  errorText: {
-    color: '#D32F2F',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  retryButton: {
-    backgroundColor: '#2196F3',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 4,
-  },
-  retryIcon: {
-    marginRight: 8,
-  },
-  retryButtonText: {
-    color: '#FFF',
-    fontWeight: 'bold',
-  },
   infoCards: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 24,
   },
   infoCard: {
     flex: 1,
-    borderRadius: 8,
     padding: 16,
+    borderRadius: 8,
     alignItems: 'center',
     marginHorizontal: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   infoCardIcon: {
     marginBottom: 8,
@@ -285,6 +205,7 @@ const styles = StyleSheet.create({
   infoCardValue: {
     fontSize: 24,
     fontWeight: 'bold',
+    marginBottom: 4,
   },
   infoCardLabel: {
     fontSize: 12,
@@ -292,19 +213,24 @@ const styles = StyleSheet.create({
   },
   performanceTips: {
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 8,
     padding: 16,
-    marginTop: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   tipsTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 16,
+    color: '#333',
   },
   tipCard: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
     marginBottom: 16,
+    alignItems: 'flex-start',
   },
   tipIcon: {
     marginRight: 12,
@@ -314,9 +240,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     marginBottom: 4,
+    color: '#333',
   },
   tipDescription: {
     fontSize: 14,
     color: '#666',
+    lineHeight: 20,
   },
 });
