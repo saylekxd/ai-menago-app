@@ -22,13 +22,18 @@ export function useTasks(userId: string | null, isManager: boolean, businessId: 
     try {
       const { data, error } = await supabase
         .from('users')
-        .select('id, user_id')
+        .select('id, user_id, role')
         .eq('id', userId)
         .single();
 
       if (error) throw error;
       
       if (data) {
+        console.log('User ID mapping:', { 
+          authId: data.id, 
+          userId: data.user_id,
+          role: data.role 
+        });
         setUserIdMap({
           authId: data.id,
           userId: data.user_id
@@ -58,16 +63,35 @@ export function useTasks(userId: string | null, isManager: boolean, businessId: 
       // Add business filter
       query = query.eq('business_id', businessId);
 
-      // If not a manager, only show tasks assigned to this user
-      if (!isManager && userIdMap.userId) {
+      // Always filter tasks by the assigned_to field for all roles
+      // All users (workers, managers, admins) should only see tasks assigned to them
+      if (userIdMap.userId) {
+        // Use user_id for assignment filter, not auth.uid()
         query = query.eq('assigned_to', userIdMap.userId);
+        console.log('Filtering tasks for user with user_id:', userIdMap.userId);
       }
 
       const { data, error } = await query.order('due_date', { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase query error:', error);
+        throw error;
+      }
+      
+      console.log(`Fetched ${data?.length || 0} tasks with filtering applied`);
+      
+      // Log all task assignments for debugging
+      if (data && data.length > 0) {
+        console.log('Task assignments:', data.map(task => ({
+          taskId: task.id,
+          assignedTo: task.assigned_to,
+          title: task.title
+        })));
+      }
+      
       setTasks(data || []);
     } catch (err: any) {
+      console.error('Error fetching tasks:', err);
       setError(err.message);
     } finally {
       setLoading(false);

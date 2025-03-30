@@ -4,6 +4,7 @@ import { User } from '@supabase/supabase-js';
 
 interface UserDetails {
   id: string;
+  user_id: string;
   first_name: string;
   last_name: string;
   role: string;
@@ -23,6 +24,7 @@ export function useUserDetails(user: User | null) {
     }
 
     try {
+      console.log('Fetching user details for auth ID:', user.id);
       const { data, error } = await supabase
         .from('users')
         .select('*')
@@ -36,6 +38,7 @@ export function useUserDetails(user: User | null) {
         setUserDetails(null);
       } else {
         // User exists, set the details
+        console.log('User details found with user_id:', data[0].user_id);
         setUserDetails(data[0]);
         setError(null);
       }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
 import { Camera } from 'lucide-react-native';
 import { useAuth, useTasks, useUserDetails } from '@/hooks';
@@ -31,6 +31,25 @@ export default function DashboardScreen() {
     isManager, 
     userDetails?.business_id || null
   );
+  
+  // Log for debugging
+  useEffect(() => {
+    console.log('User role:', userDetails?.role);
+    console.log('Is manager?', isManager);
+    console.log('Tasks count:', tasks.length);
+    
+    if (userDetails?.role === 'worker' && tasks.length > 0) {
+      // For workers, verify all tasks are assigned to them
+      const isAllTasksAssignedToUser = tasks.every(task => task.assigned_to === userDetails.user_id);
+      console.log('All tasks assigned to current user?', isAllTasksAssignedToUser);
+      
+      if (!isAllTasksAssignedToUser) {
+        // Log problematic tasks for debugging
+        const unassignedTasks = tasks.filter(task => task.assigned_to !== userDetails.user_id);
+        console.log('Unassigned tasks:', unassignedTasks.length);
+      }
+    }
+  }, [tasks, userDetails]);
   
   // Refresh tasks
   const onRefresh = async () => {
