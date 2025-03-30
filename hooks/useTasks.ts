@@ -4,9 +4,11 @@ import { Database } from '@/types/supabase';
 import * as FileSystem from 'expo-file-system';
 
 type Task = Database['public']['Tables']['tasks']['Row'];
+type TaskAssignment = Database['public']['Tables']['task_assignments']['Row'];
 
 export function useTasks(userId: string | null, isManager: boolean, businessId: string | null) {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [taskAssignments, setTaskAssignments] = useState<TaskAssignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userIdMap, setUserIdMap] = useState<{authId: string, userId: string} | null>(null);
@@ -54,42 +56,72 @@ export function useTasks(userId: string | null, isManager: boolean, businessId: 
         throw new Error('User ID mapping not available');
       }
 
-      let query = supabase.from('tasks').select('*');
-
       if (!businessId) {
         throw new Error('Business ID is required');
       }
 
-      // Add business filter
-      query = query.eq('business_id', businessId);
-
-      // Always filter tasks by the assigned_to field for all roles
-      // All users (workers, managers, admins) should only see tasks assigned to them
-      if (userIdMap.userId) {
-        // Use user_id for assignment filter, not auth.uid()
-        query = query.eq('assigned_to', userIdMap.userId);
-        console.log('Filtering tasks for user with user_id:', userIdMap.userId);
-      }
-
-      const { data, error } = await query.order('due_date', { ascending: true });
-
-      if (error) {
-        console.error('Supabase query error:', error);
-        throw error;
+      // First, fetch the user's task assignments
+      const { data: userAssignments, error: assignmentsError } = await supabase
+        .from('task_assignments')
+        .select('id, task_id, user_id, assigned_at, completed, completed_at, verification_photo_url')
+        .eq('user_id', userIdMap.userId);
+        
+      if (assignmentsError) {
+        console.error('Error fetching user assignments:', assignmentsError);
+        throw assignmentsError;
       }
       
-      console.log(`Fetched ${data?.length || 0} tasks with filtering applied`);
+      // Get all task IDs assigned to the current user
+      const userTaskIds = userAssignments?.map(a => a.task_id) || [];
       
-      // Log all task assignments for debugging
-      if (data && data.length > 0) {
-        console.log('Task assignments:', data.map(task => ({
-          taskId: task.id,
-          assignedTo: task.assigned_to,
-          title: task.title
-        })));
+      let tasksQuery;
+      let tasksData: Task[] = [];
+      
+      // For dashboard, everyone only sees tasks assigned to them
+      if (userTaskIds.length > 0) {
+        tasksQuery = supabase
+          .from('tasks')
+          .select('*')
+          .eq('business_id', businessId)
+          .in('id', userTaskIds)
+          .order('due_date', { ascending: true });
+          
+        const { data, error: tasksError } = await tasksQuery;
+        
+        if (tasksError) {
+          console.error('Supabase tasks query error:', tasksError);
+          throw tasksError;
+        }
+        
+        tasksData = data || [];
       }
       
-      setTasks(data || []);
+      // Fetch all task assignments for the user's tasks
+      let allAssignments: TaskAssignment[] = [];
+      
+      if (tasksData.length > 0) {
+        const taskIds = tasksData.map(task => task.id);
+        const { data: assignmentsData, error: allAssignmentsError } = await supabase
+          .from('task_assignments')
+          .select('id, task_id, user_id, assigned_at, completed, completed_at, verification_photo_url')
+          .in('task_id', taskIds);
+          
+        if (allAssignmentsError) {
+          console.error('Error fetching all assignments:', allAssignmentsError);
+          throw allAssignmentsError;
+        }
+        
+        allAssignments = assignmentsData || [];
+      } else {
+        // No tasks found, so use just the user's assignments
+        allAssignments = userAssignments || [];
+      }
+      
+      console.log(`Fetched ${tasksData.length} tasks and ${allAssignments.length} assignments`);
+      
+      // Set the data
+      setTasks(tasksData);
+      setTaskAssignments(allAssignments);
     } catch (err: any) {
       console.error('Error fetching tasks:', err);
       setError(err.message);
@@ -98,59 +130,116 @@ export function useTasks(userId: string | null, isManager: boolean, businessId: 
     }
   };
 
-  // Add a new task (managers only)
-  const addTask = async (taskData: Omit<Database['public']['Tables']['tasks']['Insert'], 'id' | 'created_at' | 'completed' | 'completed_at'>) => {
+  // Add a new task with multiple assignees
+  const addTask = async (
+    taskData: Omit<Database['public']['Tables']['tasks']['Insert'], 'id' | 'created_at' | 'completed' | 'completed_at'>,
+    assigneeIds: string[]
+  ) => {
     try {
       if (!userIdMap) {
         return { data: null, error: 'User ID mapping not available' };
       }
 
+      if (assigneeIds.length === 0) {
+        return { data: null, error: 'At least one assignee is required' };
+      }
+
       // Update created_by to use user_id if needed
       const updatedTaskData = {
         ...taskData,
-        created_by: userIdMap.userId, // Make sure we're using the correct user_id format
+        created_by: userIdMap.userId,
         completed: false,
       };
 
-      const { data, error } = await supabase
+      // Insert the task
+      const { data: newTaskData, error: taskError } = await supabase
         .from('tasks')
         .insert(updatedTaskData)
+        .select();
+
+      if (taskError) throw taskError;
+      
+      if (!newTaskData || newTaskData.length === 0) {
+        throw new Error('Failed to create task');
+      }
+
+      const newTaskId = newTaskData[0].id;
+      
+      // Create task assignments for each assignee using individual queries
+      for (const userId of assigneeIds) {
+        const { error: assignmentError } = await supabase
+          .from('task_assignments')
+          .insert({
+            task_id: newTaskId,
+            user_id: userId,
+            completed: false
+          });
+          
+        if (assignmentError) {
+          console.error(`Error assigning task to user ${userId}:`, assignmentError);
+        }
+      }
+      
+      // Update local state
+      setTasks(prev => [...prev, newTaskData[0]]);
+      
+      // Refresh assignments
+      fetchTasks();
+      
+      return { data: newTaskData[0], error: null };
+    } catch (err: any) {
+      console.error('Error creating task:', err);
+      return { data: null, error: err.message };
+    }
+  };
+
+  // Mark a task assignment as complete (with optional photo)
+  const completeTaskAssignment = async (assignmentId: string, photoUrl?: string) => {
+    try {
+      const updates = {
+        completed: true,
+        completed_at: new Date().toISOString(),
+        verification_photo_url: photoUrl || null
+      };
+
+      const { data, error } = await supabase
+        .from('task_assignments')
+        .update(updates)
+        .eq('id', assignmentId)
         .select();
 
       if (error) throw error;
       
       // Update local state
-      setTasks(prev => [...prev, data[0]]);
+      setTaskAssignments(prev => 
+        prev.map(assignment => 
+          assignment.id === assignmentId ? data[0] : assignment
+        )
+      );
+      
+      // Refresh the task list to update completion status
+      fetchTasks();
+      
       return { data: data[0], error: null };
     } catch (err: any) {
       return { data: null, error: err.message };
     }
   };
 
-  // Mark a task as complete (with optional photo)
+  // Legacy method for backwards compatibility
   const completeTask = async (taskId: string, photoUrl?: string) => {
     try {
-      const updates: Database['public']['Tables']['tasks']['Update'] = {
-        completed: true,
-        completed_at: new Date().toISOString(),
-      };
-
-      // If photo URL is provided, update that field
-      if (photoUrl) {
-        updates.verification_photo_url = photoUrl;
-      }
-
-      const { data, error } = await supabase
-        .from('tasks')
-        .update(updates)
-        .eq('id', taskId)
-        .select();
-
-      if (error) throw error;
+      // Find the assignment for this task for the current user
+      const assignment = taskAssignments.find(
+        a => a.task_id === taskId && a.user_id === userIdMap?.userId
+      );
       
-      // Update local state
-      setTasks(prev => prev.map(task => (task.id === taskId ? data[0] : task)));
-      return { data: data[0], error: null };
+      if (!assignment) {
+        return { data: null, error: 'Assignment not found for this task' };
+      }
+      
+      // Complete the assignment instead
+      return await completeTaskAssignment(assignment.id, photoUrl);
     } catch (err: any) {
       return { data: null, error: err.message };
     }
@@ -250,11 +339,13 @@ export function useTasks(userId: string | null, isManager: boolean, businessId: 
 
   return {
     tasks,
+    taskAssignments,
     loading,
     error,
     fetchTasks,
     addTask,
     completeTask,
+    completeTaskAssignment,
     uploadPhoto
   };
 }

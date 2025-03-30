@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, Switch, ScrollView } from 'react-native';
-import { Calendar, Camera, Plus, Users } from 'lucide-react-native';
+import { Calendar, Camera, Plus, Users, X } from 'lucide-react-native';
 import { Database } from '@/types/supabase';
+import { Worker } from '@/types/business';
 
 type TaskInsert = Omit<Database['public']['Tables']['tasks']['Insert'], 'id' | 'created_at' | 'completed' | 'completed_at'>;
+type TaskAssignmentInsert = Database['public']['Tables']['task_assignments']['Insert'];
 
 interface AddTaskFormProps {
-  onSubmit: (taskData: TaskInsert) => Promise<{ data: any, error: string | null }>;
-  workers: Array<{ id: string, user_id: string, first_name: string, last_name: string, role: string }>;
+  onSubmit: (taskData: TaskInsert, assignees: string[]) => Promise<{ data: any, error: string | null }>;
+  workers: Worker[];
   businessId: string;
   userId: string;
   onCancel: () => void;
@@ -17,7 +19,7 @@ export default function AddTaskForm({ onSubmit, workers, businessId, userId, onC
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [dueDate, setDueDate] = useState('');
-  const [assignedTo, setAssignedTo] = useState('');
+  const [assignedUsers, setAssignedUsers] = useState<string[]>([]);
   const [requiresPhoto, setRequiresPhoto] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,8 +32,8 @@ export default function AddTaskForm({ onSubmit, workers, businessId, userId, onC
   };
   
   const handleSubmit = async () => {
-    if (!title || !description || !dueDate || !assignedTo) {
-      setError('Please fill all required fields');
+    if (!title || !description || !dueDate || assignedUsers.length === 0) {
+      setError('Please fill all required fields and assign at least one user');
       return;
     }
     
@@ -39,10 +41,14 @@ export default function AddTaskForm({ onSubmit, workers, businessId, userId, onC
     setError(null);
     
     try {
-      // Find the selected worker to get their user_id
-      const selectedWorker = workers.find(w => w.id === assignedTo);
-      if (!selectedWorker) {
-        setError('Selected worker not found');
+      // Get user_ids of all selected workers
+      const selectedUserIds = assignedUsers.map(id => {
+        const worker = workers.find(w => w.id === id);
+        return worker?.user_id;
+      }).filter(Boolean) as string[];
+      
+      if (selectedUserIds.length === 0) {
+        setError('No valid assignees selected');
         setSubmitting(false);
         return;
       }
@@ -51,13 +57,12 @@ export default function AddTaskForm({ onSubmit, workers, businessId, userId, onC
         title,
         description,
         due_date: new Date(dueDate).toISOString(),
-        assigned_to: selectedWorker.user_id, // Use user_id instead of id
         created_by: userId,
         requires_photo: requiresPhoto,
         business_id: businessId,
       };
       
-      const { error } = await onSubmit(taskData);
+      const { error } = await onSubmit(taskData, selectedUserIds);
       
       if (error) {
         setError(error);
@@ -68,7 +73,7 @@ export default function AddTaskForm({ onSubmit, workers, businessId, userId, onC
       setTitle('');
       setDescription('');
       setDueDate('');
-      setAssignedTo('');
+      setAssignedUsers([]);
       setRequiresPhoto(false);
       onCancel();
     } catch (err: any) {
@@ -78,7 +83,17 @@ export default function AddTaskForm({ onSubmit, workers, businessId, userId, onC
     }
   };
   
-  const renderWorkerGroup = (title: string, workerList: Array<{ id: string, user_id: string, first_name: string, last_name: string, role: string }>) => {
+  const toggleWorkerSelection = (workerId: string) => {
+    setAssignedUsers(prev => {
+      if (prev.includes(workerId)) {
+        return prev.filter(id => id !== workerId);
+      } else {
+        return [...prev, workerId];
+      }
+    });
+  };
+  
+  const renderWorkerGroup = (title: string, workerList: Worker[]) => {
     if (workerList.length === 0) return null;
     
     return (
@@ -90,18 +105,48 @@ export default function AddTaskForm({ onSubmit, workers, businessId, userId, onC
               key={worker.id}
               style={[
                 styles.workerItem,
-                assignedTo === worker.id && styles.workerItemSelected
+                assignedUsers.includes(worker.id) && styles.workerItemSelected
               ]}
-              onPress={() => setAssignedTo(worker.id)}
+              onPress={() => toggleWorkerSelection(worker.id)}
             >
               <Text style={[
                 styles.workerName,
-                assignedTo === worker.id && styles.workerNameSelected
+                assignedUsers.includes(worker.id) && styles.workerNameSelected
               ]}>
                 {worker.first_name} {worker.last_name}
               </Text>
             </TouchableOpacity>
           ))}
+        </View>
+      </View>
+    );
+  };
+  
+  const renderSelectedAssignees = () => {
+    if (assignedUsers.length === 0) return null;
+    
+    return (
+      <View style={styles.selectedAssignees}>
+        <Text style={styles.selectedAssigneesTitle}>Selected Assignees:</Text>
+        <View style={styles.assigneeChips}>
+          {assignedUsers.map(id => {
+            const worker = workers.find(w => w.id === id);
+            if (!worker) return null;
+            
+            return (
+              <View key={id} style={styles.assigneeChip}>
+                <Text style={styles.assigneeChipText}>
+                  {worker.first_name} {worker.last_name}
+                </Text>
+                <TouchableOpacity 
+                  onPress={() => toggleWorkerSelection(id)}
+                  style={styles.removeAssigneeBtn}
+                >
+                  <X size={14} color="#666" />
+                </TouchableOpacity>
+              </View>
+            );
+          })}
         </View>
       </View>
     );
@@ -155,7 +200,8 @@ export default function AddTaskForm({ onSubmit, workers, businessId, userId, onC
       </View>
       
       <View style={styles.formGroup}>
-        <Text style={styles.label}>Assign To*</Text>
+        <Text style={styles.label}>Assign To* (Select multiple users)</Text>
+        {renderSelectedAssignees()}
         {renderWorkerGroup('Admins', groupedWorkers.admins)}
         {renderWorkerGroup('Managers', groupedWorkers.managers)}
         {renderWorkerGroup('Workers', groupedWorkers.workers)}
@@ -287,6 +333,35 @@ const styles = StyleSheet.create({
   workerNameSelected: {
     color: '#0D47A1',
     fontWeight: 'bold',
+  },
+  selectedAssignees: {
+    marginBottom: 16,
+  },
+  selectedAssigneesTitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+  },
+  assigneeChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  assigneeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E3F2FD',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  assigneeChipText: {
+    color: '#0D47A1',
+    marginRight: 4,
+  },
+  removeAssigneeBtn: {
+    padding: 2,
   },
   toggleContainer: {
     flexDirection: 'row',

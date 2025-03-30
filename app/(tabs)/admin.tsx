@@ -68,8 +68,8 @@ export default function AdminScreen() {
   };
   
   // Handle adding a new task
-  const handleAddTask = async (taskData: any) => {
-    const result = await addTask(taskData);
+  const handleAddTask = async (taskData: any, assigneeIds: string[]) => {
+    const result = await addTask(taskData, assigneeIds);
     return result;
   };
   

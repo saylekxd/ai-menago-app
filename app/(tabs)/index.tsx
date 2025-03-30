@@ -16,15 +16,18 @@ export default function DashboardScreen() {
   
   const [refreshing, setRefreshing] = useState(false);
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
+  const [selectedAssignment, setSelectedAssignment] = useState<string | null>(null);
   const [photoModalVisible, setPhotoModalVisible] = useState(false);
   
   // Initialize tasks hook once we have user details
   const { 
     tasks, 
+    taskAssignments,
     loading: tasksLoading, 
     error: tasksError,
     fetchTasks,
     completeTask,
+    completeTaskAssignment,
     uploadPhoto 
   } = useTasks(
     user?.id || null, 
@@ -37,19 +40,8 @@ export default function DashboardScreen() {
     console.log('User role:', userDetails?.role);
     console.log('Is manager?', isManager);
     console.log('Tasks count:', tasks.length);
-    
-    if (userDetails?.role === 'worker' && tasks.length > 0) {
-      // For workers, verify all tasks are assigned to them
-      const isAllTasksAssignedToUser = tasks.every(task => task.assigned_to === userDetails.user_id);
-      console.log('All tasks assigned to current user?', isAllTasksAssignedToUser);
-      
-      if (!isAllTasksAssignedToUser) {
-        // Log problematic tasks for debugging
-        const unassignedTasks = tasks.filter(task => task.assigned_to !== userDetails.user_id);
-        console.log('Unassigned tasks:', unassignedTasks.length);
-      }
-    }
-  }, [tasks, userDetails]);
+    console.log('Task assignments count:', taskAssignments?.length || 0);
+  }, [tasks, taskAssignments, userDetails]);
   
   // Refresh tasks
   const onRefresh = async () => {
@@ -69,8 +61,9 @@ export default function DashboardScreen() {
   };
   
   // Handle taking verification photo
-  const handleTakePhoto = (taskId: string) => {
+  const handleTakePhoto = (taskId: string, assignmentId?: string) => {
     setSelectedTask(taskId);
+    setSelectedAssignment(assignmentId || null);
     setPhotoModalVisible(true);
   };
   
@@ -79,7 +72,13 @@ export default function DashboardScreen() {
     if (!selectedTask) return;
     
     try {
-      await completeTask(selectedTask, photoUrl);
+      if (selectedAssignment) {
+        // Complete specific assignment
+        await completeTaskAssignment(selectedAssignment, photoUrl);
+      } else {
+        // Legacy task completion
+        await completeTask(selectedTask, photoUrl);
+      }
       await fetchTasks();
     } catch (error: any) {
       console.error('Error completing task:', error);
@@ -106,23 +105,69 @@ export default function DashboardScreen() {
   };
   
   // Handle direct task completion without photo
-  const handleCompleteTask = async (taskId: string) => {
+  const handleCompleteTask = async (taskId: string, assignmentId?: string) => {
     try {
-      await completeTask(taskId);
+      if (assignmentId) {
+        // Complete specific assignment
+        await completeTaskAssignment(assignmentId);
+      } else {
+        // Legacy task completion
+        await completeTask(taskId);
+      }
       await fetchTasks();
     } catch (error: any) {
       console.error('Error completing task:', error);
     }
   };
   
+  // Get all users assigned to a task
+  const getAssignedUsersForTask = (taskId: string) => {
+    if (!taskAssignments || taskAssignments.length === 0) return [];
+    
+    // Filter assignments for this task
+    const assignments = taskAssignments.filter(a => a.task_id === taskId);
+    
+    // Map to user format expected by TaskCard
+    return assignments.map(assignment => {
+      // Find the user in userDetails (if we had a users array, we would use that)
+      // This is simplified and would need to be replaced with actual user data
+      return {
+        id: assignment.user_id,
+        first_name: assignment.user_id === userDetails?.user_id ? userDetails.first_name : 'User',
+        last_name: assignment.user_id === userDetails?.user_id ? userDetails.last_name : assignment.user_id.substring(0, 5)
+      };
+    });
+  };
+  
+  // Get the current user's assignment for a task
+  const getUserAssignmentForTask = (taskId: string) => {
+    if (!taskAssignments || taskAssignments.length === 0 || !userDetails?.user_id) return undefined;
+    
+    return taskAssignments.find(
+      a => a.task_id === taskId && a.user_id === userDetails.user_id
+    );
+  };
+  
   // Render task item
-  const renderTaskItem = ({ item }: { item: any }) => (
-    <TaskCard
-      task={item}
-      onComplete={handleCompleteTask}
-      onTakePhoto={handleTakePhoto}
-    />
-  );
+  const renderTaskItem = ({ item }: { item: any }) => {
+    // Get task assignments and user assignment
+    const taskSpecificAssignments = taskAssignments?.filter(a => a.task_id === item.id) || [];
+    const userAssignment = getUserAssignmentForTask(item.id);
+    
+    // Get users assigned to this task
+    const assignedUsers = getAssignedUsersForTask(item.id);
+    
+    return (
+      <TaskCard
+        task={item}
+        assignedUsers={assignedUsers}
+        assignments={taskSpecificAssignments}
+        userAssignment={userAssignment}
+        onComplete={handleCompleteTask}
+        onTakePhoto={handleTakePhoto}
+      />
+    );
+  };
   
   // Loading state
   if (userLoading || !user) {
@@ -183,7 +228,11 @@ export default function DashboardScreen() {
       
       <PhotoUploadModal
         visible={photoModalVisible}
-        onClose={() => setPhotoModalVisible(false)}
+        onClose={() => {
+          setPhotoModalVisible(false);
+          setSelectedTask(null);
+          setSelectedAssignment(null);
+        }}
         onPhotoUploaded={handlePhotoUploaded}
         onUploadSuccess={handleUploadPhoto}
       />

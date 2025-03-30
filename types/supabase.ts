@@ -17,7 +17,7 @@ export interface Database {
           created_at: string
           due_date: string
           completed: boolean
-          assigned_to: string
+          assigned_to: string | null
           created_by: string
           requires_photo: boolean
           verification_photo_url: string | null
@@ -31,7 +31,7 @@ export interface Database {
           created_at?: string
           due_date: string
           completed?: boolean
-          assigned_to: string
+          assigned_to?: string | null
           created_by: string
           requires_photo?: boolean
           verification_photo_url?: string | null
@@ -45,12 +45,41 @@ export interface Database {
           created_at?: string
           due_date?: string
           completed?: boolean
-          assigned_to?: string
+          assigned_to?: string | null
           created_by?: string
           requires_photo?: boolean
           verification_photo_url?: string | null
           completed_at?: string | null
           business_id?: string
+        }
+      }
+      task_assignments: {
+        Row: {
+          id: string
+          task_id: string
+          user_id: string
+          assigned_at: string
+          completed: boolean
+          completed_at: string | null
+          verification_photo_url: string | null
+        }
+        Insert: {
+          id?: string
+          task_id: string
+          user_id: string
+          assigned_at?: string
+          completed?: boolean
+          completed_at?: string | null
+          verification_photo_url?: string | null
+        }
+        Update: {
+          id?: string
+          task_id?: string
+          user_id?: string
+          assigned_at?: string
+          completed?: boolean
+          completed_at?: string | null
+          verification_photo_url?: string | null
         }
       }
       users: {

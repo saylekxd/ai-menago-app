@@ -1,28 +1,56 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
-import { CircleCheck as CheckCircle2, CalendarClock, Camera } from 'lucide-react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, FlatList } from 'react-native';
+import { CircleCheck as CheckCircle2, CalendarClock, Camera, Users } from 'lucide-react-native';
 import { Database } from '@/types/supabase';
 
 type Task = Database['public']['Tables']['tasks']['Row'];
+type TaskAssignment = Database['public']['Tables']['task_assignments']['Row'];
 
 interface TaskCardProps {
   task: Task;
-  onComplete: (taskId: string) => void;
-  onTakePhoto: (taskId: string) => void;
+  assignments?: TaskAssignment[];
+  assignedUsers?: Array<{id: string, first_name: string, last_name: string}>;
+  onComplete: (taskId: string, assignmentId?: string) => void;
+  onTakePhoto: (taskId: string, assignmentId?: string) => void;
+  userAssignment?: TaskAssignment; // The current user's assignment
 }
 
-export default function TaskCard({ task, onComplete, onTakePhoto }: TaskCardProps) {
+export default function TaskCard({ 
+  task, 
+  assignments = [], 
+  assignedUsers = [], 
+  onComplete, 
+  onTakePhoto, 
+  userAssignment 
+}: TaskCardProps) {
   const isOverdue = new Date(task.due_date) < new Date() && !task.completed;
   const dueDate = new Date(task.due_date).toLocaleDateString();
   
+  // Check if all assignments are completed or if legacy task is completed
+  const isTaskCompleted = task.completed || 
+    (assignments.length > 0 && assignments.every(a => a.completed));
+  
+  // Count completed assignments
+  const completedCount = assignments.filter(a => a.completed).length;
+  const assigneeCount = assignments.length > 0 ? assignments.length : 1;
+  
+  // Format: "2/3 completed"
+  const completionStatus = `${completedCount}/${assigneeCount} completed`;
+  
   return (
-    <View style={[styles.card, task.completed && styles.completedCard, isOverdue && styles.overdueCard]}>
+    <View style={[styles.card, isTaskCompleted && styles.completedCard, isOverdue && styles.overdueCard]}>
       <View style={styles.header}>
         <Text style={styles.title}>{task.title}</Text>
-        {task.completed && (
+        {isTaskCompleted && (
           <View style={styles.completedBadge}>
             <CheckCircle2 size={16} color="#fff" />
             <Text style={styles.completedText}>Completed</Text>
+          </View>
+        )}
+        {!isTaskCompleted && completedCount > 0 && (
+          <View style={styles.partialCompletedBadge}>
+            <CheckCircle2 size={16} color="#fff" />
+            <Text style={styles.completedText}>{completionStatus}</Text>
           </View>
         )}
         {isOverdue && (
@@ -40,16 +68,28 @@ export default function TaskCard({ task, onComplete, onTakePhoto }: TaskCardProp
         <Text style={styles.dueDateText}>Due: {dueDate}</Text>
       </View>
       
-      {task.verification_photo_url && (
-        <Image source={{ uri: task.verification_photo_url }} style={styles.verificationImage} />
+      {/* Display assignees */}
+      {assignedUsers.length > 0 && (
+        <View style={styles.assignees}>
+          <Users size={16} color="#666" />
+          <Text style={styles.assigneesText}>
+            Assigned to: {assignedUsers.map(u => `${u.first_name} ${u.last_name}`).join(', ')}
+          </Text>
+        </View>
       )}
       
-      {!task.completed && (
+      {/* If the task has been completed by the current user, show their verification photo */}
+      {userAssignment?.completed && userAssignment?.verification_photo_url && (
+        <Image source={{ uri: userAssignment.verification_photo_url }} style={styles.verificationImage} />
+      )}
+      
+      {/* Show action buttons only if the user hasn't completed their assignment yet */}
+      {(!isTaskCompleted && (!userAssignment || !userAssignment.completed)) && (
         <View style={styles.actions}>
           {task.requires_photo && (
             <TouchableOpacity 
               style={[styles.button, styles.photoButton]} 
-              onPress={() => onTakePhoto(task.id)}
+              onPress={() => onTakePhoto(task.id, userAssignment?.id)}
             >
               <Camera size={16} color="#fff" />
               <Text style={styles.buttonText}>Take Photo</Text>
@@ -58,7 +98,7 @@ export default function TaskCard({ task, onComplete, onTakePhoto }: TaskCardProp
           
           <TouchableOpacity 
             style={[styles.button, styles.completeButton]}
-            onPress={() => onComplete(task.id)}
+            onPress={() => onComplete(task.id, userAssignment?.id)}
           >
             <CheckCircle2 size={16} color="#fff" />
             <Text style={styles.buttonText}>
@@ -111,6 +151,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
+  partialCompletedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFC107',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
   completedText: {
     color: '#fff',
     fontSize: 12,
@@ -137,11 +185,23 @@ const styles = StyleSheet.create({
   dueDate: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 8,
   },
   dueDateText: {
     fontSize: 12,
     color: '#666',
     marginLeft: 4,
+  },
+  assignees: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  assigneesText: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 4,
+    flex: 1,
   },
   verificationImage: {
     width: '100%',
