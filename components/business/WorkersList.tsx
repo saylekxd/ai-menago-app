@@ -1,13 +1,23 @@
 import React from 'react';
-import { View, Text, StyleSheet, FlatList } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { Worker } from '@/types/business';
+import { ArrowUp, ArrowDown } from 'lucide-react-native';
 
 interface WorkersListProps {
   workers: Worker[];
   showTitle?: boolean;
+  isAdmin?: boolean;
+  onUpdateRole?: (userId: string, newRole: 'worker' | 'manager') => Promise<void>;
+  isUpdating?: boolean;
 }
 
-export default function WorkersList({ workers, showTitle = true }: WorkersListProps) {
+export default function WorkersList({ 
+  workers, 
+  showTitle = true, 
+  isAdmin = false,
+  onUpdateRole,
+  isUpdating = false
+}: WorkersListProps) {
   // Function to get badge color based on worker role
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
@@ -25,15 +35,46 @@ export default function WorkersList({ workers, showTitle = true }: WorkersListPr
     <View style={styles.workerCard}>
       <View style={styles.workerInfo}>
         <Text style={styles.workerName}>{item.first_name} {item.last_name}</Text>
-        <View 
-          style={[
-            styles.roleBadge, 
-            { backgroundColor: getRoleBadgeColor(item.role) }
-          ]}
-        >
-          <Text style={styles.roleText}>
-            {item.role.charAt(0).toUpperCase() + item.role.slice(1)}
-          </Text>
+        <View style={styles.rightContainer}>
+          <View 
+            style={[
+              styles.roleBadge, 
+              { backgroundColor: getRoleBadgeColor(item.role) }
+            ]}
+          >
+            <Text style={styles.roleText}>
+              {item.role.charAt(0).toUpperCase() + item.role.slice(1)}
+            </Text>
+          </View>
+          
+          {/* Show role management buttons if user is admin */}
+          {isAdmin && item.role !== 'admin' && onUpdateRole && (
+            <View style={styles.roleButtonsContainer}>
+              {/* Show upgrade button for workers */}
+              {item.role === 'worker' && (
+                <TouchableOpacity 
+                  style={styles.upgradeButton}
+                  disabled={isUpdating}
+                  onPress={() => onUpdateRole(item.id, 'manager')}
+                >
+                  <ArrowUp size={16} color="#fff" />
+                  <Text style={styles.buttonText}>To Manager</Text>
+                </TouchableOpacity>
+              )}
+              
+              {/* Show downgrade button for managers */}
+              {item.role === 'manager' && (
+                <TouchableOpacity 
+                  style={styles.downgradeButton}
+                  disabled={isUpdating}
+                  onPress={() => onUpdateRole(item.id, 'worker')}
+                >
+                  <ArrowDown size={16} color="#fff" />
+                  <Text style={styles.buttonText}>To Worker</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
         </View>
       </View>
     </View>
@@ -101,6 +142,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  rightContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  roleButtonsContainer: {
+    flexDirection: 'row',
+    gap: 6,
+  },
   workerName: {
     fontSize: 16,
     fontWeight: 'bold',
@@ -115,6 +165,28 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: 'bold',
+  },
+  upgradeButton: {
+    backgroundColor: '#FF9800',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 4,
+  },
+  downgradeButton: {
+    backgroundColor: '#607D8B',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 4,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginLeft: 4,
   },
   emptyCard: {
     backgroundColor: '#fff',

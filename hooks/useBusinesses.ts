@@ -36,8 +36,8 @@ export function useBusinesses({ userId, userRole, businessId }: UseBusinessesOpt
     try {
       let query = supabase.from('businesses').select('*');
       
-      // For managers, only fetch their business
-      if (userRole === 'manager' && businessId) {
+      // For managers and admins, only fetch their business
+      if ((userRole === 'manager' || userRole === 'admin') && businessId) {
         query = query.eq('id', businessId);
       }
       
@@ -141,6 +141,59 @@ export function useBusinesses({ userId, userRole, businessId }: UseBusinessesOpt
     }
   };
 
+  // Function for admins to update a worker's role (e.g., upgrade to manager or downgrade to worker)
+  const updateUserRole = async (userId: string, newRole: 'worker' | 'manager') => {
+    if (!isAdmin) {
+      return { error: 'Only admins can update user roles' };
+    }
+    
+    // Admins can only update users in their business
+    if (businessId) {
+      try {
+        setError(null);
+        
+        // Verify user belongs to admin's business
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('business_id, role')
+          .eq('id', userId)
+          .single();
+          
+        if (userError) throw userError;
+        
+        if (userData.business_id !== businessId) {
+          return { error: 'You can only update users in your business' };
+        }
+        
+        // Prevent changing admin roles
+        if (userData.role === 'admin') {
+          return { error: 'Admin roles cannot be changed' };
+        }
+        
+        // Update the user's role
+        const { data, error } = await supabase
+          .from('users')
+          .update({ role: newRole })
+          .eq('id', userId)
+          .select()
+          .single();
+          
+        if (error) throw error;
+        
+        // Refresh workers list
+        await fetchWorkers(businessId);
+        
+        return { data };
+      } catch (error: any) {
+        console.error('Error updating user role:', error);
+        setError(`Failed to update user role: ${error.message}`);
+        return { error: error.message };
+      }
+    } else {
+      return { error: 'Business ID is required' };
+    }
+  };
+
   return {
     businesses,
     workers,
@@ -150,6 +203,7 @@ export function useBusinesses({ userId, userRole, businessId }: UseBusinessesOpt
     fetchWorkers,
     createBusiness,
     updateBusiness,
+    updateUserRole,
     isAdmin,
     isManager,
   };

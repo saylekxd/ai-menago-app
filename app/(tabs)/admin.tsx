@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, RefreshControl, Alert } from 'react-native';
 import { useAuth, useTasks, useUserDetails, useBusinesses } from '@/hooks';
 import { Plus, LogOut } from 'lucide-react-native';
 import { 
@@ -26,6 +26,7 @@ export default function AdminScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [addTaskModalVisible, setAddTaskModalVisible] = useState(false);
   const [createBusinessModalVisible, setCreateBusinessModalVisible] = useState(false);
+  const [updatingRoles, setUpdatingRoles] = useState(false);
   
   // Initialize businesses hook once we have user details
   const { 
@@ -36,6 +37,7 @@ export default function AdminScreen() {
     fetchBusinesses,
     fetchWorkers,
     createBusiness,
+    updateUserRole,
     isAdmin
   } = useBusinesses({
     userId: user?.id || null,
@@ -75,6 +77,33 @@ export default function AdminScreen() {
   const handleBusinessCreated = async () => {
     setCreateBusinessModalVisible(false);
     await fetchBusinesses();
+  };
+  
+  // Handle upgrading worker to manager or downgrading manager to worker
+  const handleUpdateRole = async (userId: string, newRole: 'worker' | 'manager') => {
+    setUpdatingRoles(true);
+    
+    try {
+      if (!isAdmin) {
+        Alert.alert('Permission Denied', 'Only admins can change user roles.');
+        return;
+      }
+      
+      const result = await updateUserRole(userId, newRole);
+      
+      if (result.error) {
+        Alert.alert('Error', result.error);
+      } else {
+        const roleChangeMessage = newRole === 'manager' 
+          ? 'Worker has been upgraded to manager role.' 
+          : 'Manager has been downgraded to worker role.';
+        Alert.alert('Success', roleChangeMessage);
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to update user role');
+    } finally {
+      setUpdatingRoles(false);
+    }
   };
   
   // Handle logout
@@ -159,7 +188,12 @@ export default function AdminScreen() {
             <Text style={{ display: 'none' }}>
               {JSON.stringify(workers)}
             </Text>
-            <WorkersList workers={workers} />
+            <WorkersList 
+              workers={workers} 
+              isAdmin={isAdmin} 
+              onUpdateRole={handleUpdateRole}
+              isUpdating={updatingRoles}
+            />
           </>
         )}
         
