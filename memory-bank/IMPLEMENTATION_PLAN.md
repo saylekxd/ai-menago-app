@@ -11,18 +11,9 @@ Each task is assigned one of the following priority levels:
 
 ## Phase 1: Data Model Enhancements (P1)
 
-### Step 1: Enhance User Profile Management
-1. Examine current user profile handling
-   - Review how user details are fetched from Supabase
-   - Follow best practices for user profile management
-   - **Validation**: Verify user data is correctly displayed based on the logged-in user
-   - **MCP Note**: Use Supabase MCP for any database queries
+### Step 1: [X] Enhance User Profile Management / Ready
 
-2. Review user role detection 
-   - Test how different UI elements appear based on user role
-   - **Validation**: Log in with different roles to verify appropriate access control
-
-### Step 2: Implement Recurring Tasks
+### Step 2: [ ] Implement Recurring Tasks
 1. Extend task data model to support recurring tasks
    - Add recurrence pattern fields (daily, weekly, monthly)
    - Add recurrence end date or count fields
@@ -34,9 +25,9 @@ Each task is assigned one of the following priority levels:
    - Create view to manage recurring task templates
    - **Validation**: Tasks automatically generate based on recurrence pattern
 
-## Phase 2: Enhancements & Optimization (P1-P2)
+## Phase 2:  Enhancements & Optimization (P1-P2)
 
-### Step 1: Improve Error Handling (P1)
+### Step 1: [ ] Improve Error Handling (P1)
 1. Implement more consistent error handling
    - Add user-friendly error messages where missing
    - Enhance console logging for debugging
@@ -48,7 +39,7 @@ Each task is assigned one of the following priority levels:
    - Create clear visual indicators of offline status
    - **Validation**: Test app behavior in offline mode with appropriate messaging
 
-### Step 2: Performance Optimization (P2)
+### Step 2: [ ] Performance Optimization (P2)
 1. Optimize list rendering
    - Review and improve FlatList configurations
    - Implement pagination for large data sets
@@ -59,7 +50,7 @@ Each task is assigned one of the following priority levels:
    - Implement better image caching
    - **Validation**: Compare image upload times and quality before/after
 
-### Step 3: Enhanced Testing (P2)
+### Step 3: [ ] Enhanced Testing (P2)
 1. Test on multiple platforms
    - Verify UI consistency across iOS, Android, and Web
    - **Validation**: Document and address platform-specific issues
@@ -69,7 +60,7 @@ Each task is assigned one of the following priority levels:
    - Test with large datasets
    - **Validation**: App performs reliably under various conditions
 
-## Phase 3: Feature Extensions (P2-P3)
+## Phase 3: [ ] Feature Extensions (P2-P3)
 
 ### Step 1: Add Enhanced Filtering (P2)
 1. Implement advanced task filtering
@@ -83,7 +74,7 @@ Each task is assigned one of the following priority levels:
    - Implement sorting by due date, creation date, priority, etc.
    - **Validation**: Tasks sort correctly according to selected criteria
 
-### Step 2: Implement Task Groups (P2)
+### Step 2: [ ] Implement Task Groups (P2)
 1. Design and implement dual task grouping system
    - Implement tag-based grouping (multiple tags per task)
    - Implement hierarchical grouping (parent-child relationships)
@@ -96,7 +87,7 @@ Each task is assigned one of the following priority levels:
    - Add tag creation/management interface
    - **Validation**: Groups can be created and tasks assigned to them
 
-### Step 3: Add Task Comments (P3)
+### Step 3: [ ] Add Task Comments (P3)
 1. Design comment data model
    - Extend database schema for task comments
    - Include timestamp, user, and content fields
@@ -111,7 +102,7 @@ Each task is assigned one of the following priority levels:
 
 ## Phase 4: Deployment & Documentation (P3)
 
-### Step 1: Finalize Environment Configuration (P3)
+### Step 1: [ ] Finalize Environment Configuration (P3)
 1. Review environment variables setup
    - Check .env file configuration
    - **Validation**: App uses correct environment variables in different environments
@@ -122,7 +113,7 @@ Each task is assigned one of the following priority levels:
    - **Validation**: App connects to correct environment based on build type
    - **MCP Note**: Use Supabase MCP for production database setup
 
-### Step 2: Prepare for Production Release (P3)
+### Step 2: [ ] Prepare for Production Release (P3)
 1. Review app.json and app.config.js
    - Verify app identifiers and metadata
    - Configure splash screen and icons
@@ -132,7 +123,7 @@ Each task is assigned one of the following priority levels:
    - Configure EAS Build profiles
    - **Validation**: Test builds deploy correctly to test devices
 
-### Step 3: Complete Documentation (P3)
+### Step 3: [ ] Complete Documentation (P3)
 1. Finalize developer documentation
    - Document setup process
    - Add architecture overview
