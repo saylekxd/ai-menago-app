@@ -1,18 +1,19 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, RefreshControl, Alert } from 'react-native';
 import { useAuth, useTasks, useUserDetails, useBusinesses } from '@/hooks';
-import { Plus, LogOut } from 'lucide-react-native';
+import { Plus, LogOut, User } from 'lucide-react-native';
 import { 
   AddTaskForm, 
   CreateBusinessForm, 
   BusinessList, 
-  WorkersList, 
+  TeamMembersView, 
+  CompanyDashboard,
   LoadingView, 
   ErrorView 
 } from '@/components';
 import { useRouter } from 'expo-router';
 
-export default function AdminScreen() {
+export default function TeamDashboardScreen() {
   const router = useRouter();
   const { user, signOut } = useAuth();
   const { 
@@ -121,52 +122,27 @@ export default function AdminScreen() {
   if (userError) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Admin Panel</Text>
-        </View>
+        <DashboardHeader 
+          title="Team Dashboard" 
+          userRole={userDetails?.role || 'worker'}
+          onLogout={handleLogout}
+        />
         <ErrorView 
           message={userError} 
           onRetry={refetchUserDetails}
-          additionalActions={
-            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-              <LogOut size={20} color="#fff" />
-              <Text style={styles.logoutButtonText}>Logout</Text>
-            </TouchableOpacity>
-          }
         />
-      </View>
-    );
-  }
-  
-  // If not a manager, show unauthorized message
-  if (!isManager) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Admin Panel</Text>
-        </View>
-        <View style={styles.content}>
-          <View style={styles.unauthorizedContainer}>
-            <Text style={styles.unauthorizedTitle}>Access Restricted</Text>
-            <Text style={styles.unauthorizedText}>
-              This section is only available to managers and administrators.
-            </Text>
-            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-              <LogOut size={20} color="#fff" />
-              <Text style={styles.logoutButtonText}>Logout</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
       </View>
     );
   }
   
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Admin Panel</Text>
-        <Text style={styles.subtitle}>Manage tasks, workers and businesses</Text>
-      </View>
+      <DashboardHeader 
+        title="Team Dashboard" 
+        subtitle={isManager ? "Manage tasks, workers and businesses" : "View team and tasks"}
+        userRole={userDetails?.role || 'worker'}
+        onLogout={handleLogout}
+      />
       
       <ScrollView 
         style={styles.content}
@@ -174,53 +150,75 @@ export default function AdminScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Business Management Section */}
-        <BusinessList 
-          businesses={businesses}
-          onAddBusiness={() => setCreateBusinessModalVisible(true)}
-          isAdmin={isAdmin}
-        />
-        
-        {/* Team Management Section */}
+        {/* Company Dashboard for All Users */}
         {userDetails?.business_id && (
-          <>
-            {/* Debug info - remove in production */}
-            <Text style={{ display: 'none' }}>
-              {JSON.stringify(workers)}
-            </Text>
-            <WorkersList 
-              workers={workers} 
-              isAdmin={isAdmin} 
-              onUpdateRole={handleUpdateRole}
-              isUpdating={updatingRoles}
-            />
-          </>
+          <CompanyDashboard
+            business={businesses.find(b => b.id === userDetails.business_id) || null}
+            workerCount={workers.length}
+            completedTasksCount={5} // Replace with actual data
+            pendingTasksCount={3} // Replace with actual data
+            announcements={[
+              {
+                id: '1',
+                title: 'Welcome to the Team Dashboard',
+                date: new Date().toLocaleDateString(),
+                content: 'This dashboard provides you with an overview of your team, tasks, and company information.'
+              }
+            ]}
+            onViewAllAnnouncements={() => {
+              // Handle view all announcements
+              console.log('View all announcements');
+            }}
+          />
         )}
         
-        {/* Task Management Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Task Management</Text>
-            <TouchableOpacity 
-              style={styles.addButton}
-              onPress={() => setAddTaskModalVisible(true)}
-            >
-              <Plus size={20} color="#fff" />
-              <Text style={styles.addButtonText}>Add Task</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        {/* Business Management Section - Admin & Manager Only */}
+        {isManager && (
+          <BusinessList 
+            businesses={businesses}
+            onAddBusiness={() => setCreateBusinessModalVisible(true)}
+            isAdmin={isAdmin}
+          />
+        )}
         
-        {/* Admin Footer with Logout */}
-        <View style={styles.adminFooter}>
-          <TouchableOpacity 
-            style={styles.logoutButton}
-            onPress={handleLogout}
-          >
-            <LogOut size={20} color="#fff" />
-            <Text style={styles.logoutButtonText}>Logout</Text>
-          </TouchableOpacity>
-        </View>
+        {/* Team Management Section - Visible to all, but with different capabilities */}
+        {userDetails?.business_id && (
+          <TeamMembersView
+            workers={workers}
+            isAdmin={isAdmin}
+            isManager={isManager}
+            readOnly={!isManager}
+            onUpdateRole={handleUpdateRole}
+            isUpdating={updatingRoles}
+            businessName={businesses.find(b => b.id === userDetails.business_id)?.name}
+            onContactMember={(worker) => {
+              Alert.alert(
+                'Contact Member',
+                `Would you like to contact ${worker.first_name} ${worker.last_name}?`,
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Contact', onPress: () => console.log('Contact:', worker.email) }
+                ]
+              );
+            }}
+          />
+        )}
+        
+        {/* Task Management Section - Admin & Manager Only */}
+        {isManager && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Task Management</Text>
+              <TouchableOpacity 
+                style={styles.addButton}
+                onPress={() => setAddTaskModalVisible(true)}
+              >
+                <Plus size={20} color="#fff" />
+                <Text style={styles.addButtonText}>Add Task</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
       </ScrollView>
       
       {/* Add Task Modal */}
@@ -255,6 +253,34 @@ export default function AdminScreen() {
   );
 }
 
+// Common header component with logout button
+interface DashboardHeaderProps {
+  title: string;
+  subtitle?: string;
+  userRole: string;
+  onLogout: () => void;
+}
+
+const DashboardHeader = ({ title, subtitle, userRole, onLogout }: DashboardHeaderProps) => (
+  <View style={styles.header}>
+    <View style={styles.headerContent}>
+      <View>
+        <Text style={styles.title}>{title}</Text>
+        {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+      </View>
+      <TouchableOpacity style={styles.profileButton} onPress={onLogout}>
+        <LogOut size={20} color="#fff" />
+      </TouchableOpacity>
+    </View>
+    <View style={styles.roleIndicator}>
+      <User size={14} color="#fff" />
+      <Text style={styles.roleText}>
+        {userRole === 'admin' ? 'Administrator' : userRole === 'manager' ? 'Manager' : 'Team Member'}
+      </Text>
+    </View>
+  </View>
+);
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -265,11 +291,30 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingTop: 60,
   },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  roleIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  roleText: {
+    fontSize: 12,
+    color: '#fff',
+    marginLeft: 4,
+    opacity: 0.9,
+  },
+  profileButton: {
+    padding: 8,
+  },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#fff',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   subtitle: {
     fontSize: 16,
@@ -306,30 +351,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginLeft: 8,
   },
-  unauthorizedContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 24,
-    alignItems: 'center',
-    margin: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  unauthorizedTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 16,
-    color: '#D32F2F',
-  },
-  unauthorizedText: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 24,
-    color: '#666',
-  },
   logoutButton: {
     backgroundColor: '#F44336',
     flexDirection: 'row',
@@ -342,10 +363,5 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     marginLeft: 8,
-  },
-  adminFooter: {
-    marginTop: 24,
-    marginBottom: 48,
-    alignItems: 'center',
   },
 });
